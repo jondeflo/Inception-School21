@@ -1,0 +1,81 @@
+version: '3.9'
+
+volumes:
+  db_volume:
+    driver_opts:
+      type: volume
+      device: /home/${USER}/data/db
+      o: bind
+  files_volume:
+    driver_opts:
+      type: volume
+      device: /home/${USER}/data/files
+      o: bind
+
+services:
+
+  mariadb:
+      #build: ./requirements/mariadb/
+      build:
+        context: ./requirements/mariadb
+        args:
+          MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+          MYSQL_DB: ${MYSQL_DB}
+          MYSQL_USER: ${MYSQL_USER}
+          MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      container_name: mariadb
+      image: mariadb
+      restart: always
+      volumes:
+      - db_volume:/var/lib/mysql
+      ports:
+        - "3306:3306"
+      env_file:
+        - .env
+      networks:
+        - mynet
+      healthcheck:
+        test: bash -c "[ -f var/lib/mysql/trigger.my ]"
+        timeout: 10s
+        retries: 50
+
+
+  wordpress:
+      depends_on:
+        mariadb:
+          condition: service_healthy
+      container_name: wordpress
+      build: ./requirements/wordpress/
+      image: wordpress
+      restart: always
+      volumes:
+        - files_volume:/var/www/wordpress
+      ports:
+        - "9000:9000"
+      env_file:
+        - .env
+      networks:
+        - mynet
+
+
+
+  nginx:
+      depends_on:
+        - wordpress
+      build: ./requirements/nginx/
+      container_name: nginx
+      image: nginx
+      restart: always
+      volumes:
+        - files_volume:/var/www/wordpress
+      ports:
+        - "443:443"
+      env_file:
+        - .env
+      networks:
+        - mynet
+
+
+
+networks:
+    mynet:
